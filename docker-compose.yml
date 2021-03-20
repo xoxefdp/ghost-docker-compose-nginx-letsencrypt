@@ -18,8 +18,8 @@ services:
       mail__options__service: ${SMTP_SERVICE}
       mail__options__auth__user: ${SMTP_USER}
       mail__options__auth__pass: ${SMTP_PASSWORD}
-
-
+      logging__level: ${LOGGING_LEVEL}
+      logging__rotation__period : ${LOGGING_ROTATION_PERIOD}
     volumes:
       - ${GHOST_DATA}:/var/lib/ghost/content
 
@@ -31,6 +31,8 @@ services:
       MYSQL_ROOT_PASSWORD: ${DB_PASSWORD}
     volumes:
       - ${MYSQL_DATA}:/var/lib/mysql
+      - ${MYSQL_CONFIG}:/etc/mysql
+
   phpmyadmin:
     image: phpmyadmin/phpmyadmin
     restart: always
@@ -42,6 +44,7 @@ services:
       MYSQL_ROOT_PASSWORD: ${DB_PASSWORD}
     ports:
       - "8080:80"
+
   nginx:
     image: nginx:${NGINX_VERSION}
     restart: always
@@ -53,10 +56,11 @@ services:
       - "443:443"
     command: "/bin/sh -c 'while :; do sleep 6h & wait $${!}; nginx -s reload; done & nginx -g \"daemon off;\"'"  
     environment:
-      SERVER_NAME: ${SERVER_NAME}  
+      SERVER_NAME: ${SERVER_NAME}
     volumes:
        - ${NGINX_CONFIG_PATH}/letsencrypt:/etc/letsencrypt
        - ./www:/var/www/certbot
+
   certbot:
     image: certbot/certbot
     container_name: ${CERTBOT_CONTAINER_NAME}
@@ -65,7 +69,4 @@ services:
       - ${NGINX_CONFIG_PATH}/letsencrypt:/etc/letsencrypt
       - ./www:/var/www/certbot
       - ${NGINX_CONFIG_PATH}:/etc/nginx/conf.d
-    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done;'"    
-
-
-
+    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done;'"
