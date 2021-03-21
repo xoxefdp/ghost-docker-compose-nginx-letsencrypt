@@ -2,7 +2,8 @@ version: '3'
 services:
 
   ghost:
-    image: ghost:${GHOST_VERSION}
+    build: ./ghost
+    image: ghost-alpine:${GHOST_VERSION}
     restart: always
     container_name: ${GHOST_CONTAINER_NAME}
     depends_on:
@@ -20,15 +21,24 @@ services:
       mail__options__auth__pass: ${SMTP_PASSWORD}
       logging__level: ${LOGGING_LEVEL}
       logging__rotation__period : ${LOGGING_ROTATION_PERIOD}
+    ports:
+      - "${GHOST_PORT}:2368"
     volumes:
       - ${GHOST_DATA}:/var/lib/ghost/content
+    entrypoint: ["/usr/local/bin/wait-for-it.sh", "mysql", "--", "docker-entrypoint.sh"]
+    command: ["node", "current/index.js"]
 
   db:
     image: mysql:${MYSQL_VERSION}
     restart: always
     container_name: ${MYSQL_CONTAINER_NAME}
     environment:
-      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD}
+      MYSQL_DATABASE: ${DB_NAME}
+      MYSQL_USER: ${DB_USER}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+    ports:
+      - "${MYSQL_PORT}:3306"
     volumes:
       - ${MYSQL_DATA}:/var/lib/mysql
       - ${MYSQL_CONFIG}:/etc/mysql
@@ -41,9 +51,9 @@ services:
       - db
     environment:
       PMA_HOST: db
-      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
     ports:
-      - "8080:80"
+      - "${PMA_PORT}:80"
 
   nginx:
     image: nginx:${NGINX_VERSION}
