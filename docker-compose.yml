@@ -67,10 +67,10 @@ services:
       - 80:80
       - 443:443
     volumes:
+      - /var/run/docker.sock:/tmp/docker.sock:ro
+      - ${NGINX_PROXY_CERTS_PATH}:/etc/nginx/certs:ro
       - ${NGINX_PROXY_CONFIG_PATH}:/etc/nginx/vhost.d
       - ${WWW_ROOT}:/usr/share/nginx/html
-      - /var/run/docker.sock:/tmp/docker.sock:ro
-      - ${NGINX_PROXY_CERTS_PATH}:/etc/nginx/certs
 
   letsencrypt:
     image: jrcs/letsencrypt-nginx-proxy-companion:${LETSENCRYPT_VERSION}
@@ -78,6 +78,7 @@ services:
     environment:
       DEFAULT_EMAIL: ${LETSENCRYPT_NOTIFY_EMAIL}
     volumes:
+      - ${NGINX_PROXY_CERTS_PATH}:/etc/nginx/certs:rw
       - /var/run/docker.sock:/var/run/docker.sock:ro
     volumes_from:
       - nginx-proxy
