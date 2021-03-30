@@ -1,4 +1,4 @@
-FROM ghost:4.1.0-alpine
+FROM ghost:4.1.2-alpine
 RUN apk update && \
     apk add mysql-client && \
     rm -f /var/cache/apk/*
