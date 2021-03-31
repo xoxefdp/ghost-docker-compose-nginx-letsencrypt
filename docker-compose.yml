@@ -1,84 +1,63 @@
 version: '3'
-services:
 
-  ghost:
-    build: ./ghost
-    image: ghost-alpine:${GHOST_VERSION}
-    restart: always
-    container_name: ${GHOST_CONTAINER_NAME}
-    depends_on:
-      - db
+services:
+  tugeekdeconfianza-database:
+    image: ${DB_IMAGE}:${DB_VERSION}
+    restart: unless-stopped
     environment:
-      url: ${GHOST_URL}
-      database__client: mysql
-      database__connection__host: db
-      database__connection__user: ${MYSQL_DB_USER}
-      database__connection__password: ${MYSQL_DB_PASSWORD}
-      database__connection__database: ${MYSQL_DB_NAME}
+      MYSQL_DATABASE: ${DB_NAME}
+      MYSQL_USER: ${DB_USER}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+    ports:
+      - "${LOCAL_HOST}:${DB_HOST_PORT}:3306"
+    volumes:
+      - ${DB_DATA}:/var/lib/mysql
+      - ${DB_CONFIG}:/etc/mysql
+
+  tugeekdeconfianza-service:
+    build: ./docker
+    entrypoint: ["/usr/local/bin/wait-for-it.sh", "${tugeekdeconfianza-database}", "--", "docker-entrypoint.sh"]
+    command: ["node", "current/index.js"]
+    image: ghost-alpine:${GHOST_VERSION}
+    restart: unless-stopped
+    depends_on:
+      - tugeekdeconfianza-database
+    environment:
+      url: ${GHOST_URL} # PRODUCTION
+      # url: http://${LOCAL_HOST}:${NGINX_PORT}/ # DEVELOPMENT
+      database__client: ${DB_CONNECTION}
+      database__connection__host: tugeekdeconfianza-database
+      database__connection__user: ${DB_USER}
+      database__connection__password: ${DB_PASSWORD}
+      database__connection__database: ${DB_NAME}
       mail__transport: ${GHOST_SMTP_TRANSPORT}
       mail__options__service: ${GHOST_SMTP_SERVICE}
       mail__options__auth__user: ${GHOST_SMTP_USER}
       mail__options__auth__pass: ${GHOST_SMTP_PASSWORD}
       logging__level: ${GHOST_LOGGING_LEVEL}
       logging__rotation__period : ${GHOST_LOGGING_ROTATION_PERIOD}
-      VIRTUAL_PORT: ${GHOST_INTERNAL_PORT} # letsencrypt container requirement
-      VIRTUAL_HOST: ${SERVER_NAMES} # letsencrypt container requirement
-      LETSENCRYPT_HOST: ${SERVER_NAMES} # letsencrypt container requirement
-      LETSENCRYPT_EMAIL: ${LETSENCRYPT_NOTIFY_EMAIL} # letsencrypt container requirement
     ports:
-      - ${GHOST_PORT}:2368
+      - "${LOCAL_HOST}:${GHOST_PORT}:2368"
     volumes:
       - ${GHOST_DATA}:/var/lib/ghost/content
-    entrypoint: ["/usr/local/bin/wait-for-it.sh", "mysql", "--", "docker-entrypoint.sh"]
-    command: ["node", "current/index.js"]
 
-  db:
-    image: mysql:${MYSQL_VERSION}
-    restart: always
-    container_name: ${MYSQL_CONTAINER_NAME}
-    environment:
-      MYSQL_DATABASE: ${MYSQL_DB_NAME}
-      MYSQL_USER: ${MYSQL_DB_USER}
-      MYSQL_PASSWORD: ${MYSQL_DB_PASSWORD}
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
-    ports:
-      - ${MYSQL_PORT}:3306
-    volumes:
-      - ${MYSQL_DATA}:/var/lib/mysql
-      - ${MYSQL_CONFIG}:/etc/mysql
-
-  phpmyadmin:
-    image: phpmyadmin/phpmyadmin:${PMA_VERSION}
-    restart: always
-    container_name: ${PMA_CONTAINER_NAME}
+  tugeekdeconfianza-nginx:
+    image: nginx:${NGINX_VERSION}
+    restart: unless-stopped
     depends_on:
-      - db
+      - tugeekdeconfianza-service
     environment:
-      PMA_HOST: db
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      VIRTUAL_HOST: ${SERVER_NAME} # nginx-proxy container requirement
+      LETSENCRYPT_HOST: ${SERVER_NAME} # letsencrypt container requirement
     ports:
-      - ${PMA_PORT}:80
-
-  nginx-proxy:
-    image: jwilder/nginx-proxy:${NGINX_PROXY_VERSION}
-    restart: always
-    container_name: ${NGINX_PROXY_CONTAINER_NAME}
-    ports:
-      - 80:80
-      - 443:443
+      - "${LOCAL_HOST}:${NGINX_PORT}:80"
     volumes:
-      - /var/run/docker.sock:/tmp/docker.sock:ro
-      - ${NGINX_PROXY_CERTS_PATH}:/etc/nginx/certs:ro
-      - ${NGINX_PROXY_CONFIG_PATH}:/etc/nginx/vhost.d
-      - ${WWW_ROOT}:/usr/share/nginx/html
-
-  letsencrypt:
-    image: jrcs/letsencrypt-nginx-proxy-companion:${LETSENCRYPT_VERSION}
-    container_name: ${LETSENCRYPT_CONTAINER_NAME}
-    environment:
-      DEFAULT_EMAIL: ${LETSENCRYPT_NOTIFY_EMAIL}
-    volumes:
-      - ${NGINX_PROXY_CERTS_PATH}:/etc/nginx/certs:rw
-      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ${NGINX_CONFIG_PATH}:/etc/nginx/conf.d
     volumes_from:
-      - nginx-proxy
+      - tugeekdeconfianza-service
+
+networks:
+  default:
+    external:
+      name: nginx-proxy
